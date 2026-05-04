@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAX送付状作成 - あさぎ訪問看護リハビリステーション</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN", "Meiryo", "Yu Gothic", sans-serif;
+    background: #eef2f7;
+    color: #2c3e50;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    min-height: 100vh;
+  }
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { max-height: none !important; }
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    background: #ffffff;
+    border-right: 1px solid #dde6ee;
+    padding: 24px 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+  .app-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #0a6ebd;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .app-title .icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #0a6ebd, #4ba3d6);
+    color: white;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .app-subtitle {
+    color: #7b8a9a;
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+
+  .section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eef2f7;
+  }
+  .section:last-child { border-bottom: none; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0a6ebd;
+    margin-bottom: 10px;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px; height: 14px;
+    background: #0a6ebd;
+    border-radius: 2px;
+  }
+
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: #5a6878;
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .field input, .field textarea, .field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1dbe5;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #2c3e50;
+    background: #fff;
+    transition: 0.15s;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    outline: none;
+    border-color: #0a6ebd;
+    box-shadow: 0 0 0 3px rgba(10, 110, 189, 0.1);
+  }
+  .field textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* Buttons */
+  button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: 0.15s;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  .btn-primary { background: #0a6ebd; color: white; }
+  .btn-primary:hover { background: #085a9c; }
+  .btn-secondary { background: #e7f1f9; color: #0a6ebd; }
+  .btn-secondary:hover { background: #d2e6f5; }
+  .btn-success { background: #2ea44f; color: white; }
+  .btn-success:hover { background: #258940; }
+  .btn-ghost { background: transparent; color: #5a6878; border: 1px solid #d1dbe5; }
+  .btn-ghost:hover { background: #f5f7fa; }
+  .btn-danger { background: transparent; color: #c5221f; border: 1px solid #f4cdcb; }
+  .btn-danger:hover { background: #fce8e6; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  .saved-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #eef2f7;
+    border-radius: 6px;
+    background: #fafbfd;
+  }
+  .saved-list:empty::after {
+    content: '保存されたデータはありません';
+    display: block;
+    padding: 16px;
+    text-align: center;
+    color: #a4b0bc;
+    font-size: 12px;
+  }
+  .saved-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eef2f7;
+    transition: 0.15s;
+  }
+  .saved-item:last-child { border-bottom: none; }
+  .saved-item:hover { background: #fff; }
+  .saved-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .saved-item-meta {
+    font-size: 10px;
+    color: #8b9aab;
+    margin-bottom: 6px;
+  }
+  .saved-item-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  /* ===== Preview Area ===== */
+  .preview-area {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: 100vh;
+    background: #eef2f7;
+  }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    flex-wrap: wrap;
+  }
+  .toolbar .spacer { flex: 1; }
+  .toolbar button { padding: 10px 18px; font-size: 14px; }
+  .pages-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 40px;
+  }
+
+  /* ===== A4 Page (FAXは白黒送信のためモノクロ設計) ===== */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    background: white;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    padding: 20mm 18mm 18mm 18mm;
+    position: relative;
+    overflow: hidden;
+    color: #000;
+  }
+
+  .doc-header {
+    text-align: center;
+    padding-bottom: 5mm;
+    margin-bottom: 6mm;
+    border-bottom: 3px double #000;
+  }
+  .doc-title {
+    font-size: 26pt;
+    font-weight: 900;
+    color: #000;
+    letter-spacing: 0.5em;
+    padding-left: 0.5em;
+  }
+  .doc-subtitle {
+    font-size: 9pt;
+    color: #000;
+    letter-spacing: 0.3em;
+    margin-top: 2mm;
+  }
+
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6mm;
+    font-size: 10.5pt;
+    color: #000;
+  }
+  .date-display {
+    color: #000;
+    font-weight: 600;
+  }
+  .pages-display {
+    border: 1.5px solid #000;
+    color: #000;
+    padding: 1.2mm 4mm;
+    font-weight: 700;
+    font-size: 10pt;
+  }
+
+  .recipient-block {
+    margin-bottom: 6mm;
+    padding-bottom: 4mm;
+    border-bottom: 1px solid #000;
+  }
+  .recipient-name {
+    font-size: 17pt;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 1mm;
+  }
+  .recipient-person {
+    font-size: 13pt;
+    color: #000;
+    padding-left: 2mm;
+  }
+
+  .sender-block {
+    margin-bottom: 6mm;
+    padding: 4mm 5mm;
+    border: 1.5px solid #000;
+    border-left: 5px solid #000;
+  }
+  .sender-label {
+    font-size: 8.5pt;
+    color: #000;
+    font-weight: 700;
+    margin-bottom: 1.5mm;
+    letter-spacing: 0.15em;
+    border-bottom: 1px dotted #000;
+    padding-bottom: 1mm;
+    display: inline-block;
+  }
+  .sender-name {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #000;
+    margin: 2mm 0;
+  }
+  .sender-contact {
+    font-size: 10.5pt;
+    color: #000;
+    display: flex;
+    gap: 8mm;
+  }
+  .sender-contact span strong {
+    color: #000;
+    font-weight: 700;
+    border: 1px solid #000;
+    padding: 0.3mm 1.5mm;
+    font-size: 8.5pt;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 2mm;
+  }
+  .sender-person {
+    margin-top: 2.5mm;
+    padding-top: 2mm;
+    border-top: 1px dotted #000;
+    font-size: 11pt;
+    color: #000;
+    font-weight: 600;
+  }
+  .sender-person::before {
+    content: '担当： ';
+    font-size: 9pt;
+    font-weight: 700;
+    margin-right: 1mm;
+  }
+
+  .title-block {
+    margin: 6mm 0 6mm;
+    padding: 4mm 5mm;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    text-align: center;
+  }
+  .title-label {
+    font-size: 9pt;
+    color: #000;
+    letter-spacing: 0.5em;
+    margin-bottom: 1.5mm;
+    font-weight: 700;
+  }
+  .title-text {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #000;
+  }
+
+  .body-section-label {
+    font-size: 11pt;
+    color: #000;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    margin-bottom: 3mm;
+    padding: 1mm 4mm 1.5mm 4mm;
+    border-left: 5px solid #000;
+    border-bottom: 2px solid #000;
+    display: inline-block;
+  }
+  .body-block {
+    font-size: 11pt;
+    line-height: 1.9;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #000;
+    margin-top: 1mm;
+  }
+
+  .page-footer {
+    position: absolute;
+    bottom: 12mm;
+    left: 18mm;
+    right: 18mm;
+    padding-top: 3mm;
+    border-top: 1px solid #000;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    color: #000;
+  }
+
+  .page-2 .body-section-label { margin-top: 0; }
+
+  /* Print */
+  @media print {
+    body, html { background: white; }
+    .app { display: block; }
+    .sidebar, .toolbar { display: none !important; }
+    .preview-area { padding: 0; max-height: none; overflow: visible; background: white; }
+    .pages-container { gap: 0; padding: 0; }
+    .page {
+      width: 210mm;
+      height: 297mm;
+      box-shadow: none;
+      margin: 0;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+    @page { size: A4; margin: 0; }
+  }
+
+  /* Mobile sidebar toggle for preview */
+  .mobile-toggle { display: none; }
+  @media (max-width: 1100px) {
+    .mobile-toggle {
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+  }
+
+  .empty-hint {
+    color: #b8c2cc;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="app-title">
+      <span class="icon">📠</span>
+      <span>FAX送付状作成</span>
+    </div>
+    <div class="app-subtitle">あさぎ訪問看護リハビリステーション</div>
+
+    <!-- 入力 -->
+    <div class="section">
+      <div class="section-title">基本情報</div>
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="field">
+        <label>宛先（事業所名・敬称）</label>
+        <input type="text" id="f-recipient" placeholder="例) ○○病院 御中">
+      </div>
+      <div class="field">
+        <label>担当者名</label>
+        <input type="text" id="f-person" placeholder="例) 山田 太郎 様">
+      </div>
+      <div class="field">
+        <label>送付枚数（この用紙を含む）</label>
+        <input type="number" id="f-pages" min="1" max="99" value="1">
+      </div>
+      <div class="field">
+        <label>送信者名（自分の名前 / 一度入力すると次回から自動入力）</label>
+        <input type="text" id="f-sender" placeholder="例) 浅木 太郎">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">本文</div>
+      <div class="field">
+        <label>表題</label>
+        <input type="text" id="f-title" placeholder="例) ご報告の件">
+      </div>
+      <div class="field">
+        <label>本文</label>
+        <textarea id="f-body" placeholder="お世話になっております。&#10;あさぎ訪問看護リハビリステーションです。&#10;..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary btn-sm" onclick="openTemplateSaveDialog()">＋ テンプレートに保存</button>
+        <button class="btn-ghost btn-sm" onclick="clearForm()">クリア</button>
+      </div>
+    </div>
+
+    <!-- テンプレート -->
+    <div class="section">
+      <div class="section-title">テンプレート</div>
+      <div class="saved-list" id="templates-list"></div>
+    </div>
+
+    <!-- 履歴 -->
+    <div class="section">
+      <div class="section-title">履歴</div>
+      <div class="btn-row" style="margin-bottom: 8px;">
+        <button class="btn-success btn-sm" onclick="saveToHistory()">📝 現在の内容を履歴に保存</button>
+      </div>
+      <div class="saved-list" id="history-list"></div>
+    </div>
+
+  </aside>
+
+  <!-- ===== PREVIEW ===== -->
+  <main class="preview-area">
+    <div class="toolbar">
+      <strong style="color:#0a6ebd;">プレビュー</strong>
+      <span class="spacer"></span>
+      <button class="btn-ghost" onclick="document.querySelector('.sidebar').scrollIntoView({behavior:'smooth'})" id="mobileEditBtn" style="display:none;">✏️ 編集</button>
+      <button class="btn-secondary" onclick="printDoc()">🖨 印刷</button>
+      <button class="btn-primary" onclick="downloadPDF()" id="pdfBtn">⬇ PDFダウンロード</button>
+    </div>
+
+    <div class="pages-container" id="pagesContainer">
+      <!-- Page 1 -->
+      <div class="page page-1" id="page1">
+        <div class="doc-header">
+          <div class="doc-title">FAX送付状</div>
+          <div class="doc-subtitle">FACSIMILE COVER SHEET</div>
+        </div>
+
+        <div class="top-row">
+          <div class="date-display" id="p-date">2026年5月1日</div>
+          <div class="pages-display" id="p-pages">送付枚数： 1 枚（本紙含む）</div>
+        </div>
+
+        <div class="recipient-block">
+          <div class="recipient-name" id="p-recipient"><span class="empty-hint">宛先を入力してください</span></div>
+          <div class="recipient-person" id="p-person"></div>
+        </div>
+
+        <div class="sender-block">
+          <div class="sender-label">差出人 / FROM</div>
+          <div class="sender-name">あさぎ訪問看護リハビリステーション</div>
+          <div class="sender-contact">
+            <span><strong>TEL</strong>042-851-6691</span>
+            <span><strong>FAX</strong>042-851-6695</span>
+          </div>
+          <div class="sender-person" id="p-sender" style="display:none;"></div>
+        </div>
+
+        <div class="title-block">
+          <div class="title-label">件 名</div>
+          <div class="title-text" id="p-title"><span class="empty-hint">表題を入力してください</span></div>
+        </div>
+
+        <div class="body-section-label">本　文</div>
+        <div class="body-block" id="p-body"></div>
+
+        <div class="page-footer">
+          <span>あさぎ訪問看護リハビリステーション</span>
+          <span id="p-footer-1">1 / 1</span>
+        </div>
+      </div>
+
+      <!-- Page 2 (本文続き、必要時のみ表示) -->
+      <div class="page page-2" id="page2" style="display:none;">
+        <div class="doc-header">
+          <div class="doc-title" style="font-size:18pt;">FAX送付状（つづき）</div>
+        </div>
+        <div class="body-section-label">本　文（つづき）</div>
+        <div class="body-block" id="p-body-2"></div>
+        <div class="page-footer">
+          <span>あさぎ訪問看護リハビリステーション</span>
+          <span id="p-footer-2">2 / 2</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== Template Save Dialog ===== -->
+<div id="dialog-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:100; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:10px; padding:24px; min-width:320px; max-width:400px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+    <h3 style="color:#0a6ebd; margin-bottom:12px;">テンプレートを保存</h3>
+    <div class="field">
+      <label>テンプレート名</label>
+      <input type="text" id="dialog-input" placeholder="例) ご報告テンプレート">
+    </div>
+    <div class="btn-row" style="justify-content:flex-end; margin-top:16px;">
+      <button class="btn-ghost" onclick="closeDialog()">キャンセル</button>
+      <button class="btn-primary" onclick="confirmTemplateSave()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================
+ * State
+ * ===================================== */
+const STORAGE_KEYS = {
+  current: 'asagi_fax_current_v1',
+  templates: 'asagi_fax_templates_v1',
+  history: 'asagi_fax_history_v1',
+  defaultSender: 'asagi_fax_default_sender_v1'
+};
+
+const SENDER = {
+  name: 'あさぎ訪問看護リハビリステーション',
+  tel: '042-851-6691',
+  fax: '042-851-6695'
+};
+
+let templates = [];
+let history = [];
+
+/* =====================================
+ * Utilities
+ * ===================================== */
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function formatDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${parseInt(y)}年${parseInt(m)}月${parseInt(d)}日`;
+}
+function nowString() {
+  const d = new Date();
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* =====================================
+ * Form / Render
+ * ===================================== */
+function getFormData() {
+  return {
+    date: document.getElementById('f-date').value,
+    recipient: document.getElementById('f-recipient').value,
+    person: document.getElementById('f-person').value,
+    pages: parseInt(document.getElementById('f-pages').value) || 1,
+    title: document.getElementById('f-title').value,
+    body: document.getElementById('f-body').value,
+    sender: document.getElementById('f-sender').value
+  };
+}
+function setFormData(d) {
+  document.getElementById('f-date').value = d.date || todayISO();
+  document.getElementById('f-recipient').value = d.recipient || '';
+  document.getElementById('f-person').value = d.person || '';
+  document.getElementById('f-pages').value = d.pages || 1;
+  document.getElementById('f-title').value = d.title || '';
+  document.getElementById('f-body').value = d.body || '';
+  if (d.sender !== undefined) {
+    document.getElementById('f-sender').value = d.sender || '';
+  }
+}
+function getDefaultSender() {
+  try { return localStorage.getItem(STORAGE_KEYS.defaultSender) || ''; } catch(e) { return ''; }
+}
+function saveDefaultSender(name) {
+  try { localStorage.setItem(STORAGE_KEYS.defaultSender, name || ''); } catch(e) {}
+}
+
+function renderPreview() {
+  const d = getFormData();
+
+  document.getElementById('p-date').textContent = formatDate(d.date) || '　';
+  document.getElementById('p-pages').textContent = `送付枚数： ${d.pages} 枚（本紙含む）`;
+
+  const recipientEl = document.getElementById('p-recipient');
+  if (d.recipient) {
+    recipientEl.textContent = d.recipient;
+  } else {
+    recipientEl.innerHTML = '<span class="empty-hint">宛先を入力してください</span>';
+  }
+  document.getElementById('p-person').textContent = d.person || '';
+
+  const titleEl = document.getElementById('p-title');
+  if (d.title) {
+    titleEl.textContent = d.title;
+  } else {
+    titleEl.innerHTML = '<span class="empty-hint">表題を入力してください</span>';
+  }
+
+  // 送信者名（差出人ブロック内）
+  const senderEl = document.getElementById('p-sender');
+  if (d.sender) {
+    senderEl.textContent = d.sender;
+    senderEl.style.display = 'block';
+  } else {
+    senderEl.textContent = '';
+    senderEl.style.display = 'none';
+  }
+
+  // Body with auto-pagination
+  paginateBody(d.body || '');
+
+  // Save current
+  saveCurrent();
+}
+
+/* Auto pagination: split body between page 1 and page 2 if it overflows page 1's body area */
+function paginateBody(bodyText) {
+  const body1 = document.getElementById('p-body');
+  const body2 = document.getElementById('p-body-2');
+  const page2 = document.getElementById('page2');
+  const footer1 = document.getElementById('p-footer-1');
+  const footer2 = document.getElementById('p-footer-2');
+
+  // Reset
+  body1.textContent = bodyText;
+  body2.textContent = '';
+  page2.style.display = 'none';
+
+  if (!bodyText) {
+    footer1.textContent = '1 / 1';
+    return;
+  }
+
+  // Compute available height for body on page 1
+  // Page 1 height: 297mm; padding-top 20mm + padding-bottom 18mm
+  // Top content (header + top-row + recipient + sender + title-block + label) ~ varies
+  // Use measurement: distance from body1.offsetTop to page footer top
+  const page1 = document.getElementById('page1');
+  const pageRect = page1.getBoundingClientRect();
+  const bodyRect = body1.getBoundingClientRect();
+  const footerEl = page1.querySelector('.page-footer');
+  const footerTop = footerEl.getBoundingClientRect().top;
+  const available = footerTop - bodyRect.top - 8; // small buffer
+
+  if (body1.scrollHeight <= available + 1) {
+    footer1.textContent = '1 / 1';
+    return;
+  }
+
+  // Binary search for split point that fits in page 1
+  let lo = 0, hi = bodyText.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi + 1) / 2);
+    body1.textContent = bodyText.substring(0, mid);
+    if (body1.scrollHeight <= available + 1) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  let split = lo;
+
+  // Try to break at a natural boundary near the split
+  const window = bodyText.substring(Math.max(0, split - 80), split);
+  const lastNewline = window.lastIndexOf('\n');
+  const lastPeriod = Math.max(window.lastIndexOf('。'), window.lastIndexOf('、'));
+  if (lastNewline >= 0) {
+    split = Math.max(0, split - 80) + lastNewline + 1;
+  } else if (lastPeriod >= 0) {
+    split = Math.max(0, split - 80) + lastPeriod + 1;
+  }
+
+  if (split <= 0) split = Math.floor(bodyText.length / 2);
+
+  body1.textContent = bodyText.substring(0, split);
+  body2.textContent = bodyText.substring(split);
+  page2.style.display = 'block';
+  footer1.textContent = '1 / 2';
+  footer2.textContent = '2 / 2';
+}
+
+/* =====================================
+ * Storage
+ * ===================================== */
+function saveCurrent() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.current, JSON.stringify(getFormData()));
+  } catch(e) { console.warn('save current failed', e); }
+}
+function loadCurrent() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEYS.current);
+    if (s) {
+      const d = JSON.parse(s);
+      if (!d.date) d.date = todayISO();
+      setFormData(d);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function loadTemplates() {
+  try {
+    templates = JSON.parse(localStorage.getItem(STORAGE_KEYS.templates) || '[]');
+  } catch(e) { templates = []; }
+}
+function saveTemplates() {
+  localStorage.setItem(STORAGE_KEYS.templates, JSON.stringify(templates));
+}
+function loadHistory() {
+  try {
+    history = JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || '[]');
+  } catch(e) { history = []; }
+}
+function saveHistoryStorage() {
+  localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(history));
+}
+
+/* =====================================
+ * Templates UI
+ * ===================================== */
+function renderTemplatesList() {
+  const container = document.getElementById('templates-list');
+  if (templates.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = templates.map(t => `
+    <div class="saved-item">
+      <div class="saved-item-title">${escapeHtml(t.name)}</div>
+      <div class="saved-item-meta">${escapeHtml(t.title || '(無題)')}</div>
+      <div class="saved-item-actions">
+        <button class="btn-secondary btn-sm" onclick="applyTemplate('${t.id}')">適用</button>
+        <button class="btn-danger btn-sm" onclick="deleteTemplate('${t.id}')">削除</button>
+      </div>
+    </div>
+  `).join('');
+}
+function openTemplateSaveDialog() {
+  const d = getFormData();
+  document.getElementById('dialog-input').value = d.title || '';
+  document.getElementById('dialog-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('dialog-input').focus(), 50);
+}
+function closeDialog() {
+  document.getElementById('dialog-overlay').style.display = 'none';
+}
+function confirmTemplateSave() {
+  const name = document.getElementById('dialog-input').value.trim();
+  if (!name) { alert('テンプレート名を入力してください'); return; }
+  const d = getFormData();
+  templates.unshift({
+    id: uid(),
+    name: name,
+    title: d.title,
+    body: d.body,
+    createdAt: nowString()
+  });
+  saveTemplates();
+  renderTemplatesList();
+  closeDialog();
+}
+function applyTemplate(id) {
+  const t = templates.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('f-title').value = t.title || '';
+  document.getElementById('f-body').value = t.body || '';
+  renderPreview();
+}
+function deleteTemplate(id) {
+  if (!confirm('このテンプレートを削除しますか？')) return;
+  templates = templates.filter(x => x.id !== id);
+  saveTemplates();
+  renderTemplatesList();
+}
+
+/* =====================================
+ * History UI
+ * ===================================== */
+function renderHistoryList() {
+  const container = document.getElementById('history-list');
+  if (history.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = history.map(h => {
+    const label = (h.recipient || '(宛先未設定)') + ' / ' + (h.title || '(無題)');
+    return `
+      <div class="saved-item">
+        <div class="saved-item-title">${escapeHtml(label)}</div>
+        <div class="saved-item-meta">${escapeHtml(h.savedAt)}</div>
+        <div class="saved-item-actions">
+          <button class="btn-secondary btn-sm" onclick="loadFromHistory('${h.id}')">読込</button>
+          <button class="btn-danger btn-sm" onclick="deleteHistory('${h.id}')">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+function saveToHistory() {
+  const d = getFormData();
+  if (!d.recipient && !d.title && !d.body) {
+    alert('保存する内容がありません。');
+    return;
+  }
+  history.unshift({
+    id: uid(),
+    ...d,
+    savedAt: nowString()
+  });
+  // 最大50件
+  if (history.length > 50) history = history.slice(0, 50);
+  saveHistoryStorage();
+  renderHistoryList();
+  flashToolbar('履歴に保存しました');
+}
+function loadFromHistory(id) {
+  const h = history.find(x => x.id === id);
+  if (!h) return;
+  setFormData(h);
+  renderPreview();
+  flashToolbar('履歴から読み込みました');
+}
+function deleteHistory(id) {
+  if (!confirm('この履歴を削除しますか？')) return;
+  history = history.filter(x => x.id !== id);
+  saveHistoryStorage();
+  renderHistoryList();
+}
+
+/* =====================================
+ * Form actions
+ * ===================================== */
+function clearForm() {
+  if (!confirm('入力内容をクリアしますか？（履歴・送信者名・テンプレートは残ります）')) return;
+  const keepSender = getDefaultSender();
+  setFormData({ date: todayISO(), sender: keepSender });
+  renderPreview();
+}
+
+/* =====================================
+ * Print / PDF
+ * ===================================== */
+function printDoc() {
+  window.print();
+}
+async function downloadPDF() {
+  const d = getFormData();
+  const filename = `FAX送付状_${(d.recipient || '無題').replace(/[\\/:*?"<>|]/g,'')}_${(d.date||todayISO()).replace(/-/g,'')}.pdf`;
+
+  // html2pdf.bundleが読み込まれると window.html2canvas と window.jspdf がグローバルに公開される
+  const _html2canvas = window.html2canvas;
+  const _jsPDF = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : null;
+
+  if (!_html2canvas || !_jsPDF) {
+    alert('PDFライブラリが読み込めませんでした。\nインターネット接続を確認して再読み込みするか、「印刷」ボタン→「PDFとして保存」をご利用ください。');
+    return;
+  }
+
+  const btn = document.getElementById('pdfBtn');
+  const prevText = btn.textContent;
+  btn.textContent = '生成中...';
+  btn.disabled = true;
+
+  const page1 = document.getElementById('page1');
+  const page2 = document.getElementById('page2');
+
+  // 印刷用にbox-shadowを一時的に外す
+  const restoreP1 = page1.style.boxShadow;
+  const restoreP2 = page2.style.boxShadow;
+  page1.style.boxShadow = 'none';
+  page2.style.boxShadow = 'none';
+
+  try {
+    const pdf = new _jsPDF({
+      unit: 'mm',
+      format: 'a4',
+      orientation: 'portrait',
+      compress: true
+    });
+
+    const baseOpts = {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      letterRendering: true,
+      allowTaint: false
+    };
+
+    // レイアウト完了を待機
+    await new Promise(r => setTimeout(r, 100));
+
+    // ===== Page 1 =====
+    const canvas1 = await _html2canvas(page1, {
+      ...baseOpts,
+      width: page1.offsetWidth,
+      height: page1.offsetHeight,
+      windowWidth: page1.offsetWidth,
+      windowHeight: page1.offsetHeight
+    });
+    const imgData1 = canvas1.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(imgData1, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+
+    // ===== Page 2 (本文が長い場合のみ) =====
+    if (page2.style.display !== 'none') {
+      const canvas2 = await _html2canvas(page2, {
+        ...baseOpts,
+        width: page2.offsetWidth,
+        height: page2.offsetHeight,
+        windowWidth: page2.offsetWidth,
+        windowHeight: page2.offsetHeight
+      });
+      const imgData2 = canvas2.toDataURL('image/jpeg', 0.95);
+      pdf.addPage();
+      pdf.addImage(imgData2, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+
+    pdf.save(filename);
+  } catch (err) {
+    console.error('PDF生成エラー:', err);
+    alert('PDF生成中にエラーが発生しました。\n「印刷」ボタンから「PDFとして保存」をお試しください。\n\n詳細: ' + (err.message || err));
+  } finally {
+    page1.style.boxShadow = restoreP1;
+    page2.style.boxShadow = restoreP2;
+    btn.textContent = prevText;
+    btn.disabled = false;
+  }
+}
+
+/* =====================================
+ * Toolbar feedback
+ * ===================================== */
+let flashTimer = null;
+function flashToolbar(msg) {
+  const tb = document.querySelector('.toolbar strong');
+  const orig = 'プレビュー';
+  tb.textContent = '✔ ' + msg;
+  tb.style.color = '#2ea44f';
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    tb.textContent = orig;
+    tb.style.color = '#0a6ebd';
+  }, 1800);
+}
+
+/* =====================================
+ * Default templates seed
+ * ===================================== */
+function seedTemplatesIfEmpty() {
+  if (templates.length > 0) return;
+  templates = [
+    {
+      id: uid(),
+      name: 'ご報告（標準）',
+      title: 'ご報告の件',
+      body: 'いつもお世話になっております。\nあさぎ訪問看護リハビリステーションです。\n\n下記の件につきまして、ご報告申し上げます。\n\n　・\n　・\n\nご確認のほど、よろしくお願い申し上げます。',
+      createdAt: nowString()
+    },
+    {
+      id: uid(),
+      name: 'ご連絡（簡潔）',
+      title: 'ご連絡',
+      body: 'いつも大変お世話になっております。\nあさぎ訪問看護リハビリステーションです。\n\n標記の件につきまして、ご連絡申し上げます。\n\n何卒よろしくお願い申し上げます。',
+      createdAt: nowString()
+    },
+    {
+      id: uid(),
+      name: '訪問看護指示書 依頼',
+      title: '訪問看護指示書交付のお願い',
+      body: 'いつも大変お世話になっております。\nあさぎ訪問看護リハビリステーションです。\n\n下記の利用者様につきまして、訪問看護指示書の交付をお願い申し上げます。\n\n　利用者氏名：\n　生年月日　：\n　指示期間　：　　　年　　月　　日 〜　　　年　　月　　日\n\nお手数をおかけいたしますが、何卒よろしくお願い申し上げます。',
+      createdAt: nowString()
+    }
+  ];
+  saveTemplates();
+}
+
+/* =====================================
+ * Init
+ * ===================================== */
+function bindEvents() {
+  ['f-date', 'f-recipient', 'f-person', 'f-pages', 'f-title', 'f-body', 'f-sender'].forEach(id => {
+    document.getElementById(id).addEventListener('input', renderPreview);
+  });
+  // 送信者名は変更時に「デフォルト送信者」としても保存
+  document.getElementById('f-sender').addEventListener('change', (e) => {
+    saveDefaultSender(e.target.value.trim());
+  });
+  document.getElementById('f-sender').addEventListener('blur', (e) => {
+    saveDefaultSender(e.target.value.trim());
+  });
+  // Close dialog on overlay click
+  document.getElementById('dialog-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'dialog-overlay') closeDialog();
+  });
+  // Resize observer for repagination on window resize
+  window.addEventListener('resize', () => {
+    clearTimeout(window._renderResizeTimer);
+    window._renderResizeTimer = setTimeout(renderPreview, 200);
+  });
+}
+
+function init() {
+  loadTemplates();
+  loadHistory();
+  seedTemplatesIfEmpty();
+
+  // Set defaults
+  document.getElementById('f-date').value = todayISO();
+
+  // 保存済みデフォルト送信者を先に入れる
+  const defaultSender = getDefaultSender();
+  if (defaultSender) {
+    document.getElementById('f-sender').value = defaultSender;
+  }
+
+  // Restore current draft（draftにsenderがあればそれが優先）
+  loadCurrent();
+
+  // それでも送信者欄が空 かつ 保存済みデフォルトがある場合は補完
+  if (!document.getElementById('f-sender').value && defaultSender) {
+    document.getElementById('f-sender').value = defaultSender;
+  }
+
+  // Render
+  bindEvents();
+  renderTemplatesList();
+  renderHistoryList();
+  renderPreview();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
