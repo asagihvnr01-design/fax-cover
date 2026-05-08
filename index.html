@@ -457,6 +457,16 @@
         <label>本文</label>
         <textarea id="f-body" placeholder="お世話になっております。&#10;あさぎ訪問看護リハビリステーションです。&#10;..."></textarea>
       </div>
+      <div class="field">
+        <label>本文フォントサイズ</label>
+        <select id="f-fontsize">
+          <option value="9">小（9pt）</option>
+          <option value="10">やや小（10pt）</option>
+          <option value="11" selected>標準（11pt）</option>
+          <option value="13">やや大（13pt）</option>
+          <option value="15">大（15pt）</option>
+        </select>
+      </div>
       <div class="btn-row">
         <button class="btn-secondary btn-sm" onclick="openTemplateSaveDialog()">＋ テンプレートに保存</button>
         <button class="btn-ghost btn-sm" onclick="clearForm()">クリア</button>
@@ -619,7 +629,8 @@ function getFormData() {
     pages: parseInt(document.getElementById('f-pages').value) || 1,
     title: document.getElementById('f-title').value,
     body: document.getElementById('f-body').value,
-    sender: document.getElementById('f-sender').value
+    sender: document.getElementById('f-sender').value,
+    fontSize: parseInt(document.getElementById('f-fontsize').value) || 11
   };
 }
 function setFormData(d) {
@@ -631,6 +642,9 @@ function setFormData(d) {
   document.getElementById('f-body').value = d.body || '';
   if (d.sender !== undefined) {
     document.getElementById('f-sender').value = d.sender || '';
+  }
+  if (d.fontSize !== undefined) {
+    document.getElementById('f-fontsize').value = String(d.fontSize);
   }
 }
 function getDefaultSender() {
@@ -670,6 +684,13 @@ function renderPreview() {
     senderEl.textContent = '';
     senderEl.style.display = 'none';
   }
+
+  // 本文フォントサイズを適用（ページ1・2両方）
+  const fontSize = d.fontSize || 11;
+  const body1El = document.getElementById('p-body');
+  const body2El = document.getElementById('p-body-2');
+  if (body1El) body1El.style.fontSize = fontSize + 'pt';
+  if (body2El) body2El.style.fontSize = fontSize + 'pt';
 
   // Body with auto-pagination
   paginateBody(d.body || '');
@@ -820,6 +841,7 @@ function confirmTemplateSave() {
     name: name,
     title: d.title,
     body: d.body,
+    fontSize: d.fontSize,
     createdAt: nowString()
   });
   saveTemplates();
@@ -831,6 +853,9 @@ function applyTemplate(id) {
   if (!t) return;
   document.getElementById('f-title').value = t.title || '';
   document.getElementById('f-body').value = t.body || '';
+  if (t.fontSize !== undefined) {
+    document.getElementById('f-fontsize').value = String(t.fontSize);
+  }
   renderPreview();
 }
 function deleteTemplate(id) {
@@ -1048,6 +1073,8 @@ function bindEvents() {
   ['f-date', 'f-recipient', 'f-person', 'f-pages', 'f-title', 'f-body', 'f-sender'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderPreview);
   });
+  // フォントサイズはchangeイベントで反応
+  document.getElementById('f-fontsize').addEventListener('change', renderPreview);
   // 送信者名は変更時に「デフォルト送信者」としても保存
   document.getElementById('f-sender').addEventListener('change', (e) => {
     saveDefaultSender(e.target.value.trim());
