@@ -105,6 +105,9 @@
   }
   .field textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .contact-row { display: grid; grid-template-columns: 1fr 116px 34px; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .contact-row .contact-remove { padding: 7px 0; font-size: 12px; background: transparent; color: #c5221f; border: 1px solid #f4cdcb; border-radius: 6px; cursor: pointer; }
+  .contact-row .contact-remove:hover { background: #fce8e6; }
 
   /* Buttons */
   button {
@@ -434,19 +437,9 @@
         <input type="text" id="f-recipient" placeholder="例) ○○病院 御中">
       </div>
       <div class="field">
-        <label>担当者名</label>
-        <input type="text" id="f-person" placeholder="例) 山田 太郎">
-      </div>
-      <div class="field">
-        <label>敬称</label>
-        <select id="f-honorific">
-          <option value="様" selected>様</option>
-          <option value="御中">御中</option>
-          <option value="先生御侍史">先生御侍史</option>
-          <option value="ご担当者様">ご担当者様</option>
-          <option value="ご担当医">ご担当医</option>
-          <option value="御机下">御机下</option>
-        </select>
+        <label>担当者（＋で複数追加可）</label>
+        <div id="contacts-container"></div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addContact()" style="margin-top:6px;width:100%;">＋ 担当者を追加</button>
       </div>
       <div class="field">
         <label>送付枚数（この用紙を含む）</label>
@@ -636,19 +629,18 @@ function getFormData() {
   return {
     date: document.getElementById('f-date').value,
     recipient: document.getElementById('f-recipient').value,
-    person: document.getElementById('f-person').value,
+    contacts: getContacts(),
     pages: parseInt(document.getElementById('f-pages').value) || 1,
     title: document.getElementById('f-title').value,
     body: document.getElementById('f-body').value,
     sender: document.getElementById('f-sender').value,
-    fontSize: parseInt(document.getElementById('f-fontsize').value) || 11,
-    honorific: document.getElementById('f-honorific').value
+    fontSize: parseInt(document.getElementById('f-fontsize').value) || 11
   };
 }
 function setFormData(d) {
   document.getElementById('f-date').value = d.date || todayISO();
   document.getElementById('f-recipient').value = d.recipient || '';
-  document.getElementById('f-person').value = d.person || '';
+  setContacts(normalizeContacts(d));
   document.getElementById('f-pages').value = d.pages || 1;
   document.getElementById('f-title').value = d.title || '';
   document.getElementById('f-body').value = d.body || '';
@@ -658,10 +650,59 @@ function setFormData(d) {
   if (d.fontSize !== undefined) {
     document.getElementById('f-fontsize').value = String(d.fontSize);
   }
-  if (d.honorific !== undefined) {
-    document.getElementById('f-honorific').value = d.honorific || '様';
-  }
 }
+/* =====================================
+ * 担当者（複数可）
+ * ===================================== */
+const HONORIFIC_OPTIONS = ['様', '御中', '先生御侍史', 'ご担当者様', 'ご担当医', '御机下'];
+let contacts = [];
+function honorificOptionsHtml(sel) {
+  return HONORIFIC_OPTIONS.map(o => `<option value="${o}"${o === sel ? ' selected' : ''}>${o}</option>`).join('');
+}
+function renderContacts() {
+  const cont = document.getElementById('contacts-container');
+  if (!contacts.length) contacts = [{ name: '', honorific: '様' }];
+  cont.innerHTML = contacts.map((ct, i) => `
+    <div class="contact-row">
+      <input type="text" class="contact-name" data-i="${i}" placeholder="例) 山田 太郎" value="${escapeHtml(ct.name || '')}">
+      <select class="contact-honorific" data-i="${i}">${honorificOptionsHtml(ct.honorific || '様')}</select>
+      <button type="button" class="contact-remove" data-i="${i}" title="この担当者を削除">✕</button>
+    </div>
+  `).join('');
+  cont.querySelectorAll('.contact-name').forEach(el => {
+    el.addEventListener('input', e => { contacts[+e.target.dataset.i].name = e.target.value; renderPreview(); });
+  });
+  cont.querySelectorAll('.contact-honorific').forEach(el => {
+    el.addEventListener('change', e => { contacts[+e.target.dataset.i].honorific = e.target.value; renderPreview(); });
+  });
+  cont.querySelectorAll('.contact-remove').forEach(el => {
+    el.addEventListener('click', e => removeContact(+e.target.dataset.i));
+  });
+}
+function getContacts() {
+  return contacts.map(c => ({ name: c.name || '', honorific: c.honorific || '様' }));
+}
+function setContacts(list) {
+  contacts = (list && list.length) ? list.map(c => ({ name: c.name || '', honorific: c.honorific || '様' })) : [{ name: '', honorific: '様' }];
+  renderContacts();
+}
+function normalizeContacts(d) {
+  if (d.contacts && d.contacts.length) return d.contacts;
+  if (d.person !== undefined || d.honorific !== undefined) return [{ name: d.person || '', honorific: d.honorific || '様' }];
+  return [{ name: '', honorific: '様' }];
+}
+function addContact() {
+  contacts.push({ name: '', honorific: '様' });
+  renderContacts();
+  renderPreview();
+}
+function removeContact(i) {
+  if (contacts.length <= 1) contacts = [{ name: '', honorific: '様' }];
+  else contacts.splice(i, 1);
+  renderContacts();
+  renderPreview();
+}
+
 function getDefaultSender() {
   try { return localStorage.getItem(STORAGE_KEYS.defaultSender) || ''; } catch(e) { return ''; }
 }
@@ -681,16 +722,16 @@ function renderPreview() {
   } else {
     recipientEl.innerHTML = '<span class="empty-hint">宛先を入力してください</span>';
   }
-  // 担当者名＋敬称（ご担当者様・ご担当医は名前が空でも単独表示）
-  const honorific = d.honorific || '';
-  const standalone = (honorific === 'ご担当者様' || honorific === 'ご担当医');
-  let personText = '';
-  if (d.person) {
-    personText = honorific ? (d.person + '　' + honorific) : d.person;
-  } else if (standalone) {
-    personText = honorific;
-  }
-  document.getElementById('p-person').textContent = personText;
+  // 担当者（複数可）＋敬称
+  const lines = (d.contacts || []).map(c => {
+    const nm = (c.name || '').trim();
+    const ho = c.honorific || '';
+    const sa = (ho === 'ご担当者様' || ho === 'ご担当医');
+    if (nm) return escapeHtml(nm) + '　' + escapeHtml(ho);
+    if (sa) return escapeHtml(ho);
+    return '';
+  }).filter(x => x);
+  document.getElementById('p-person').innerHTML = lines.join('<br>');
 
   const titleEl = document.getElementById('p-title');
   if (d.title) {
@@ -1099,7 +1140,6 @@ function bindEvents() {
   });
   // フォントサイズはchangeイベントで反応
   document.getElementById('f-fontsize').addEventListener('change', renderPreview);
-  document.getElementById('f-honorific').addEventListener('change', renderPreview);
   // 送信者名は変更時に「デフォルト送信者」としても保存
   document.getElementById('f-sender').addEventListener('change', (e) => {
     saveDefaultSender(e.target.value.trim());
@@ -1139,6 +1179,9 @@ function init() {
   if (!document.getElementById('f-sender').value && defaultSender) {
     document.getElementById('f-sender').value = defaultSender;
   }
+
+  // 担当者欄を初期化（ドラフト未保存時も1行表示）
+  renderContacts();
 
   // Render
   bindEvents();
