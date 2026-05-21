@@ -435,7 +435,18 @@
       </div>
       <div class="field">
         <label>担当者名</label>
-        <input type="text" id="f-person" placeholder="例) 山田 太郎 様">
+        <input type="text" id="f-person" placeholder="例) 山田 太郎">
+      </div>
+      <div class="field">
+        <label>敬称</label>
+        <select id="f-honorific">
+          <option value="様" selected>様</option>
+          <option value="御中">御中</option>
+          <option value="先生御侍史">先生御侍史</option>
+          <option value="ご担当者様">ご担当者様</option>
+          <option value="ご担当医">ご担当医</option>
+          <option value="御机下">御机下</option>
+        </select>
       </div>
       <div class="field">
         <label>送付枚数（この用紙を含む）</label>
@@ -630,7 +641,8 @@ function getFormData() {
     title: document.getElementById('f-title').value,
     body: document.getElementById('f-body').value,
     sender: document.getElementById('f-sender').value,
-    fontSize: parseInt(document.getElementById('f-fontsize').value) || 11
+    fontSize: parseInt(document.getElementById('f-fontsize').value) || 11,
+    honorific: document.getElementById('f-honorific').value
   };
 }
 function setFormData(d) {
@@ -645,6 +657,9 @@ function setFormData(d) {
   }
   if (d.fontSize !== undefined) {
     document.getElementById('f-fontsize').value = String(d.fontSize);
+  }
+  if (d.honorific !== undefined) {
+    document.getElementById('f-honorific').value = d.honorific || '様';
   }
 }
 function getDefaultSender() {
@@ -666,7 +681,16 @@ function renderPreview() {
   } else {
     recipientEl.innerHTML = '<span class="empty-hint">宛先を入力してください</span>';
   }
-  document.getElementById('p-person').textContent = d.person || '';
+  // 担当者名＋敬称（ご担当者様・ご担当医は名前が空でも単独表示）
+  const honorific = d.honorific || '';
+  const standalone = (honorific === 'ご担当者様' || honorific === 'ご担当医');
+  let personText = '';
+  if (d.person) {
+    personText = honorific ? (d.person + '　' + honorific) : d.person;
+  } else if (standalone) {
+    personText = honorific;
+  }
+  document.getElementById('p-person').textContent = personText;
 
   const titleEl = document.getElementById('p-title');
   if (d.title) {
@@ -1075,6 +1099,7 @@ function bindEvents() {
   });
   // フォントサイズはchangeイベントで反応
   document.getElementById('f-fontsize').addEventListener('change', renderPreview);
+  document.getElementById('f-honorific').addEventListener('change', renderPreview);
   // 送信者名は変更時に「デフォルト送信者」としても保存
   document.getElementById('f-sender').addEventListener('change', (e) => {
     saveDefaultSender(e.target.value.trim());
