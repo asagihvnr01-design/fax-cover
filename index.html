@@ -1135,7 +1135,7 @@ function seedTemplatesIfEmpty() {
  * Init
  * ===================================== */
 function bindEvents() {
-  ['f-date', 'f-recipient', 'f-person', 'f-pages', 'f-title', 'f-body', 'f-sender'].forEach(id => {
+  ['f-date', 'f-recipient', 'f-pages', 'f-title', 'f-body', 'f-sender'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderPreview);
   });
   // フォントサイズはchangeイベントで反応
