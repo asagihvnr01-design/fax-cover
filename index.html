@@ -1175,6 +1175,9 @@ function init() {
   // Restore current draft（draftにsenderがあればそれが優先）
   loadCurrent();
 
+  // 日付はドラフトに関わらず常に「アプリ起動日（=今日）」を初期値にする
+  document.getElementById('f-date').value = todayISO();
+
   // それでも送信者欄が空 かつ 保存済みデフォルトがある場合は補完
   if (!document.getElementById('f-sender').value && defaultSender) {
     document.getElementById('f-sender').value = defaultSender;
