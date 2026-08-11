@@ -104,6 +104,7 @@
     box-shadow: 0 0 0 3px rgba(10, 110, 189, 0.1);
   }
   .field textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+  #f-body { min-height: 260px; }
   .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .contact-row { display: grid; grid-template-columns: 1fr 116px 34px; gap: 6px; margin-bottom: 6px; align-items: center; }
   .contact-row .contact-remove { padding: 7px 0; font-size: 12px; background: transparent; color: #c5221f; border: 1px solid #f4cdcb; border-radius: 6px; cursor: pointer; }
@@ -180,8 +181,10 @@
   .preview-area {
     padding: 24px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     max-height: 100vh;
     background: #eef2f7;
+    contain: layout;
   }
   .toolbar {
     display: flex;
@@ -214,6 +217,7 @@
     position: relative;
     overflow: hidden;
     color: #000;
+    contain: layout;
   }
 
   .doc-header {
@@ -1134,8 +1138,11 @@ function seedTemplatesIfEmpty() {
  * Init
  * ===================================== */
 function bindEvents() {
+  // 入力時のパフォーマンス改善＋iPadでの意図せぬスクロール抑制のため150msデバウンス
+  let _rpTimer = null;
+  const debouncedRender = () => { clearTimeout(_rpTimer); _rpTimer = setTimeout(renderPreview, 150); };
   ['f-date', 'f-recipient', 'f-pages', 'f-title', 'f-body', 'f-sender'].forEach(id => {
-    document.getElementById(id).addEventListener('input', renderPreview);
+    document.getElementById(id).addEventListener('input', debouncedRender);
   });
   // フォントサイズはchangeイベントで反応
   document.getElementById('f-fontsize').addEventListener('change', renderPreview);
