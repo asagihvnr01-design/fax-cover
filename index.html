@@ -410,6 +410,15 @@
       display: inline-block;
       margin-bottom: 12px;
     }
+    /* iPad/スマホ: プレビューの独自スクロールをやめページ全体でスクロール（最下部まで到達可能に） */
+    .preview-area { max-height: none; overflow: visible; contain: none; padding: 12px; }
+    .pages-container { padding-bottom: 80px; }
+    #mobileEditBtn { display: inline-block !important; }
+  }
+  /* iOS Safariのアドレスバー分を考慮した高さ */
+  @supports (height: 100dvh) {
+    .sidebar, .preview-area { max-height: 100dvh; }
+    .app { min-height: 100dvh; }
   }
 
   .empty-hint {
@@ -549,18 +558,7 @@
         </div>
       </div>
 
-      <!-- Page 2 (本文続き、必要時のみ表示) -->
-      <div class="page page-2" id="page2" style="display:none;">
-        <div class="doc-header">
-          <div class="doc-title" style="font-size:18pt;">FAX送付状（つづき）</div>
-        </div>
-        <div class="body-section-label">本　文（つづき）</div>
-        <div class="body-block" id="p-body-2"></div>
-        <div class="page-footer">
-          <span>あさぎ訪問看護リハビリステーション</span>
-          <span id="p-footer-2">2 / 2</span>
-        </div>
-      </div>
+      <!-- 2枚目以降は本文量に応じてJSで自動生成 -->
     </div>
 
   </main>
@@ -767,70 +765,79 @@ function renderPreview() {
   saveCurrent();
 }
 
-/* Auto pagination: split body between page 1 and page 2 if it overflows page 1's body area */
-function paginateBody(bodyText) {
-  const body1 = document.getElementById('p-body');
-  const body2 = document.getElementById('p-body-2');
-  const page2 = document.getElementById('page2');
-  const footer1 = document.getElementById('p-footer-1');
-  const footer2 = document.getElementById('p-footer-2');
-
-  // Reset
-  body1.textContent = bodyText;
-  body2.textContent = '';
-  page2.style.display = 'none';
-
-  if (!bodyText) {
-    footer1.textContent = '1 / 1';
-    return;
-  }
-
-  // Compute available height for body on page 1
-  // Page 1 height: 297mm; padding-top 20mm + padding-bottom 18mm
-  // Top content (header + top-row + recipient + sender + title-block + label) ~ varies
-  // Use measurement: distance from body1.offsetTop to page footer top
-  const page1 = document.getElementById('page1');
-  const pageRect = page1.getBoundingClientRect();
-  const bodyRect = body1.getBoundingClientRect();
-  const footerEl = page1.querySelector('.page-footer');
-  const footerTop = footerEl.getBoundingClientRect().top;
-  const available = footerTop - bodyRect.top - 8; // small buffer
-
-  if (body1.scrollHeight <= available + 1) {
-    footer1.textContent = '1 / 1';
-    return;
-  }
-
-  // Binary search for split point that fits in page 1
-  let lo = 0, hi = bodyText.length;
+/* Auto pagination: 本文量に応じて2枚目以降を必要なだけ自動生成（フッターと重ならない） */
+function makeContPage() {
+  const div = document.createElement('div');
+  div.className = 'page page-cont';
+  div.innerHTML = '<div class="doc-header"><div class="doc-title" style="font-size:18pt;">FAX送付状（つづき）</div></div>'
+    + '<div class="body-section-label">本　文（つづき）</div>'
+    + '<div class="body-block"></div>'
+    + '<div class="page-footer"><span>あさぎ訪問看護リハビリステーション</span><span class="p-footer-n"></span></div>';
+  return div;
+}
+// ページ内で本文に使える高さ（offsetTopベースなので画面縮小表示の影響を受けない）
+function availableHeight(page, bodyEl) {
+  const footerEl = page.querySelector('.page-footer');
+  return footerEl.offsetTop - bodyEl.offsetTop - 8;
+}
+// bodyEl に text を収まる分だけ入れ、使った文字数を返す
+function fitSplit(bodyEl, text, available) {
+  bodyEl.textContent = text;
+  if (bodyEl.scrollHeight <= available + 1) return text.length;
+  let lo = 0, hi = text.length;
   while (lo < hi) {
     const mid = Math.floor((lo + hi + 1) / 2);
-    body1.textContent = bodyText.substring(0, mid);
-    if (body1.scrollHeight <= available + 1) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
+    bodyEl.textContent = text.substring(0, mid);
+    if (bodyEl.scrollHeight <= available + 1) lo = mid; else hi = mid - 1;
   }
   let split = lo;
-
-  // Try to break at a natural boundary near the split
-  const window = bodyText.substring(Math.max(0, split - 80), split);
-  const lastNewline = window.lastIndexOf('\n');
-  const lastPeriod = Math.max(window.lastIndexOf('。'), window.lastIndexOf('、'));
-  if (lastNewline >= 0) {
-    split = Math.max(0, split - 80) + lastNewline + 1;
-  } else if (lastPeriod >= 0) {
-    split = Math.max(0, split - 80) + lastPeriod + 1;
+  const w = text.substring(Math.max(0, split - 80), split);
+  const nl = w.lastIndexOf('\n');
+  const pd = Math.max(w.lastIndexOf('。'), w.lastIndexOf('、'));
+  if (nl >= 0) split = Math.max(0, split - 80) + nl + 1;
+  else if (pd >= 0) split = Math.max(0, split - 80) + pd + 1;
+  if (split <= 0) split = Math.max(1, lo);
+  bodyEl.textContent = text.substring(0, split);
+  return split;
+}
+function paginateBody(bodyText) {
+  const cont = document.getElementById('pagesContainer');
+  cont.querySelectorAll('.page-cont').forEach(p => p.remove());
+  const page1 = document.getElementById('page1');
+  const body1 = document.getElementById('p-body');
+  const fontSize = body1.style.fontSize;
+  let rest = bodyText || '';
+  const used = fitSplit(body1, rest, availableHeight(page1, body1));
+  rest = rest.substring(used);
+  const pages = [page1];
+  let guard = 0;
+  while (rest.length > 0 && guard < 30) {
+    guard++;
+    const p = makeContPage();
+    cont.appendChild(p);
+    const b = p.querySelector('.body-block');
+    b.style.fontSize = fontSize;
+    const u = fitSplit(b, rest, availableHeight(p, b));
+    if (u <= 0) break;
+    rest = rest.substring(u);
+    pages.push(p);
   }
-
-  if (split <= 0) split = Math.floor(bodyText.length / 2);
-
-  body1.textContent = bodyText.substring(0, split);
-  body2.textContent = bodyText.substring(split);
-  page2.style.display = 'block';
-  footer1.textContent = '1 / 2';
-  footer2.textContent = '2 / 2';
+  const N = pages.length;
+  pages.forEach((p, i) => {
+    const f = p.querySelector('.page-footer span:last-child');
+    if (f) f.textContent = (i + 1) + ' / ' + N;
+  });
+}
+// 画面幅に合わせてプレビューを縮小表示（PDF出力時は原寸に戻す）
+function fitPreviewScale() {
+  const area = document.querySelector('.preview-area');
+  const cont = document.getElementById('pagesContainer');
+  const page1 = document.getElementById('page1');
+  if (!area || !cont || !page1) return;
+  const avail = area.clientWidth - 32;
+  const pageW = page1.offsetWidth || 794;
+  const z = Math.min(1, avail / pageW);
+  cont.style.zoom = String(z);
 }
 
 /* =====================================
@@ -1021,14 +1028,14 @@ async function downloadPDF() {
   btn.textContent = '生成中...';
   btn.disabled = true;
 
-  const page1 = document.getElementById('page1');
-  const page2 = document.getElementById('page2');
+  const cont = document.getElementById('pagesContainer');
+  const pages = Array.from(cont.querySelectorAll('.page'));
 
-  // 印刷用にbox-shadowを一時的に外す
-  const restoreP1 = page1.style.boxShadow;
-  const restoreP2 = page2.style.boxShadow;
-  page1.style.boxShadow = 'none';
-  page2.style.boxShadow = 'none';
+  // 印刷用にbox-shadowと縮小表示を一時的に外す
+  const restoreShadows = pages.map(p => p.style.boxShadow);
+  pages.forEach(p => { p.style.boxShadow = 'none'; });
+  const restoreZoom = cont.style.zoom;
+  cont.style.zoom = '1';
 
   try {
     const pdf = new _jsPDF({
@@ -1050,29 +1057,19 @@ async function downloadPDF() {
     // レイアウト完了を待機
     await new Promise(r => setTimeout(r, 100));
 
-    // ===== Page 1 =====
-    const canvas1 = await _html2canvas(page1, {
-      ...baseOpts,
-      width: page1.offsetWidth,
-      height: page1.offsetHeight,
-      windowWidth: page1.offsetWidth,
-      windowHeight: page1.offsetHeight
-    });
-    const imgData1 = canvas1.toDataURL('image/jpeg', 0.95);
-    pdf.addImage(imgData1, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
-
-    // ===== Page 2 (本文が長い場合のみ) =====
-    if (page2.style.display !== 'none') {
-      const canvas2 = await _html2canvas(page2, {
+    // ===== 全ページを順にキャプチャ =====
+    for (let i = 0; i < pages.length; i++) {
+      const pg = pages[i];
+      const canvas = await _html2canvas(pg, {
         ...baseOpts,
-        width: page2.offsetWidth,
-        height: page2.offsetHeight,
-        windowWidth: page2.offsetWidth,
-        windowHeight: page2.offsetHeight
+        width: pg.offsetWidth,
+        height: pg.offsetHeight,
+        windowWidth: pg.offsetWidth,
+        windowHeight: pg.offsetHeight
       });
-      const imgData2 = canvas2.toDataURL('image/jpeg', 0.95);
-      pdf.addPage();
-      pdf.addImage(imgData2, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      const img = canvas.toDataURL('image/jpeg', 0.95);
+      if (i > 0) pdf.addPage();
+      pdf.addImage(img, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
     }
 
     pdf.save(filename);
@@ -1080,8 +1077,8 @@ async function downloadPDF() {
     console.error('PDF生成エラー:', err);
     alert('PDF生成中にエラーが発生しました。\n「印刷」ボタンから「PDFとして保存」をお試しください。\n\n詳細: ' + (err.message || err));
   } finally {
-    page1.style.boxShadow = restoreP1;
-    page2.style.boxShadow = restoreP2;
+    pages.forEach((p, i) => { p.style.boxShadow = restoreShadows[i]; });
+    cont.style.zoom = restoreZoom;
     btn.textContent = prevText;
     btn.disabled = false;
   }
@@ -1160,7 +1157,7 @@ function bindEvents() {
   // Resize observer for repagination on window resize
   window.addEventListener('resize', () => {
     clearTimeout(window._renderResizeTimer);
-    window._renderResizeTimer = setTimeout(renderPreview, 200);
+    window._renderResizeTimer = setTimeout(() => { fitPreviewScale(); renderPreview(); }, 200);
   });
 }
 
@@ -1196,6 +1193,7 @@ function init() {
   bindEvents();
   renderTemplatesList();
   renderHistoryList();
+  fitPreviewScale();
   renderPreview();
 }
 
